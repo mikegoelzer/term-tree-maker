@@ -67,21 +67,26 @@ uv run pytest
 
 `term-tree-maker` uses `hatch-vcs` to derive its version number directly from git tags that match the pattern `term-tree-maker-v<MAJOR>.<MINOR>.<PATCH>`. No files need manual editing—bumping the version = creating the right tag.
 
-### Choosing the new version
+### Choosing the new version (helper script)
 
-Decide whether you’re cutting a patch, minor, or major release, then create the tag:
+Use `scripts/bump_version.py` to increment and tag the next semantic version automatically:
 
-| Release type | Example commands |
-|--------------|------------------|
-| Patch release | ```bash\ngit switch main\ngit pull origin main\nNEW_VERSION=0.0.2\ngit tag term-tree-maker-v${NEW_VERSION}\n``` |
-| Minor release | ```bash\ngit switch main\ngit pull origin main\nNEW_VERSION=0.1.0\ngit tag term-tree-maker-v${NEW_VERSION}\n``` |
-| Major release | ```bash\ngit switch main\ngit pull origin main\nNEW_VERSION=1.0.0\ngit tag term-tree-maker-v${NEW_VERSION}\n``` |
+```bash
+# make sure you're on an up-to-date main
+git switch main
+git pull origin main
 
-> Replace `NEW_VERSION` with whatever semantic version you are publishing.
+# bump patch / minor / major (add --push to push the tag automatically)
+uv run python scripts/bump_version.py patch --push
+# uv run python scripts/bump_version.py minor --push
+# uv run python scripts/bump_version.py major --push
+```
+
+The script looks at existing tags, calculates the next semantic version, creates the `term-tree-maker-vX.Y.Z` tag, and optionally pushes it to `origin`.
 
 ### Publishing to PyPI via GitHub Actions
 
-1. **Push the tag** so GitHub knows about it:
+1. **Push the tag** so GitHub knows about it (skip if you already passed `--push` to the helper script):
    ```bash
    git push origin term-tree-maker-v${NEW_VERSION}
    ```
