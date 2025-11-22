@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling>=1.24", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.vcs]
+tag-pattern = "^term-tree-maker-v(?P<version>.+)$"
+
+[tool.hatch.version.raw-options]
+root = "."
+relative_to = "pyproject.toml"
+git_describe_command = "git describe --dirty --tags --long --match term-tree-maker-v*"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/term_tree_maker/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/term_tree_maker"]
+include = [
+  "src/term_tree_maker/make-tree-screenshot.sh",
+  "src/term_tree_maker/make-png-from-ssh.sh",
+  "src/term_tree_maker/tree.py",
+  "src/term_tree_maker/tree_crop.py",
+]
+
+[project]
+name = "term-tree-maker"
+requires-python = ">=3.10"
+dynamic = ["version"]
+description = "Tools for rendering Curv file/directory trees and generating terminal screenshots."
+readme = "readme.md"
+license = {text = "MIT"}
+authors = [{name="Mike Goelzer"}]
+classifiers = ["Programming Language :: Python :: 3 :: Only"]
+dependencies = [
+  "rich>=13",
+  "python-dotenv>=1.1.0",
+  "pillow>=10",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+]
+
+[project.scripts]
+tree = "term_tree_maker.cli:main"
+make-tree-screenshot = "term_tree_maker.make_tree_screenshot_cli:main"
+make-png-from-ssh = "term_tree_maker.make_png_from_ssh_cli:main"
+
+[project.urls]
+homepage = "https://github.com/curvcpu/tree-maker"
+repository = "https://github.com/curvcpu/tree-maker"
+documentation = "https://github.com/curvcpu/tree-maker/readme.md"
+issues = "https://github.com/curvcpu/tree-maker/issues"
+
+

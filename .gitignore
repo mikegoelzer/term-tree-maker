@@ -1,0 +1,15 @@
+# Python / build artifacts
+__pycache__/
+*.pyc
+src/term_tree_maker/_version.py
+
+# Virtual environments
+.venv/
+
+# Build outputs
+dist/
+*.egg-info/
+
+# uv lock / state handled by repo already (keep uv.lock tracked)
+.uv/
+
