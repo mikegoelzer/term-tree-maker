@@ -101,8 +101,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def confirm(message: str) -> bool:
-    if os.environ.get("TERM_TREE_MAKER_NONINTERACTIVE") == "1":
-        return False
     try:
         from rich.prompt import Confirm
 
