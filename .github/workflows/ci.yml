@@ -1,9 +1,20 @@
-name: release
+name: CI
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+      && format('PR #{0}: {1}{2}',
+                github.event.number,
+                github.event.pull_request.title,
+                github.event.head_commit && github.event.head_commit.message
+                  ? format(' ({0})', github.event.head_commit.message)
+                  : '')
+      || github.event.head_commit && github.event.head_commit.message
+      || github.ref_name }}
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   test:
@@ -14,12 +25,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python: ["3.10", "3.11", "3.12"]
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
-          ref: ${{ github.event.release.tag_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -39,28 +50,3 @@ jobs:
       - name: Run pytest
         run: uv run pytest
 
-  pypi-publish:
-    name: Build and upload to PyPI
-    needs: [test]
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      contents: read
-      id-token: write   # required for trusted publishing (no saved secrets)
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Build wheel + sdist
-        run: uv build
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist
