@@ -17,14 +17,15 @@ if [[ -z "${DISPLAY-}" ]]; then
 fi
 
 # make sure we are in the right directory
-if [[ ! -f "$PWD/make-tree-screenshot.sh" ]]; then
-  echo "ERROR: install.sh must be run from the directory containing \`make-tree-screenshot.sh\`" >&2
+SCRIPT_RELATIVE_PATH="src/term_tree_maker/make-tree-screenshot.sh"
+if [[ ! -f "$PWD/${SCRIPT_RELATIVE_PATH}" ]]; then
+  echo "ERROR: install.sh must be run from the repo root (expected to find ${SCRIPT_RELATIVE_PATH})" >&2
   echo "Current directory: \`$PWD\`" >&2
   exit 1
 fi
 
 # get the absolute path to the directory containing make-tree-screenshot.sh
-TREE_SHOT_DIR=$(dirname $(realpath $PWD/make-tree-screenshot.sh))
+TREE_SHOT_DIR=$(dirname "$(realpath "$PWD/${SCRIPT_RELATIVE_PATH}")")
 
 # ---- import the current GUI env into the user systemd instance -------------
 

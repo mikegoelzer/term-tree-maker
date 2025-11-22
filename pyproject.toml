@@ -44,6 +44,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4",
+  "rich>=13",
 ]
 
 [project.scripts]

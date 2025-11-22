@@ -41,7 +41,7 @@ make-png-from-ssh
 
 ```bash
 cd <this directory>
-[ -f $PWD/make-tree-screenshot.sh ] && echo "✅ good you're in the right dir: $PWD" || echo "ERROR: you're in the wrong dir"
+[ -f $PWD/src/term_tree_maker/make-tree-screenshot.sh ] && echo "✅ good you're in the right dir: $PWD" || echo "ERROR: you're in the wrong dir"
 ```
 
 The above just verifies that we are in the right directory because `install.sh` won't work otherwise.  It writes config files the current value of `$PWD`.
@@ -69,14 +69,13 @@ source ~/.bashrc
 - From an SSH session into the server where the tree-maker is installed:
 
 ```bash
-[user@server] cd <this directory>
-[user@server] ./make-png-from-ssh.sh
+[user@server] make-png-from-ssh
 [user@server] it2dl tree.png   # download the tree image to your local machine
 [user@server] imgcat tree.png  # display the tree image in your local terminal
 ```
 
-- Or, even easier, just run this from an ssh session:
+- Or run the screenshot workflow locally (GNOME desktop session) with a custom output prefix:
 
 ```bash
-[user@server] ./make-png-from-ssh.sh
+make-tree-screenshot output/my-tree
 ```

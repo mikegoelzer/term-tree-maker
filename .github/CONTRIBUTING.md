@@ -61,6 +61,18 @@ uv run pytest
 
 (More tests will be added, but the dependency and command are ready.)
 
+### Handy Make targets
+
+Common workflows are wrapped in `Makefile`:
+
+| Command | Description |
+|---------|-------------|
+| `make test` | Runs the pytest suite. |
+| `make clean` | Removes build artifacts (`dist/`, `.pytest_cache/`, `.venv/`, etc.). |
+| `make publish-patch` | Runs tests, bumps the patch version (`scripts/bump_version.py patch --push`), and creates the GitHub Release. |
+| `make publish-minor` | Same flow, bumping the minor version. |
+| `make publish-major` | Prompts for confirmation before pushing and releasing a major version. |
+
 ---
 
 ## 2. Versioning & release process

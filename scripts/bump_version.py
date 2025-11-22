@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -83,22 +84,57 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "part",
         choices=("major", "minor", "patch"),
+        nargs="?",
         help="Which part of the semantic version to increment.",
     )
     parser.add_argument(
+        "--show-latest",
+        action="store_true",
+        help="Print the latest known version (no tagging) and exit.",
+    )
+    push_group = parser.add_mutually_exclusive_group()
+    push_group.add_argument(
         "--push",
         action="store_true",
         help="Push the newly created tag to origin.",
     )
+    push_group.add_argument(
+        "--prompt-push",
+        action="store_true",
+        help="Ask before pushing the tag (safe default for major releases).",
+    )
     return parser.parse_args()
+
+
+def confirm(message: str) -> bool:
+    if os.environ.get("TERM_TREE_MAKER_NONINTERACTIVE") == "1":
+        return False
+    try:
+        from rich.prompt import Confirm
+
+        return Confirm.ask(message, default=False)
+    except Exception:
+        resp = input(f"{message} [y/N]: ").strip().lower()
+        return resp in {"y", "yes"}
 
 
 def main() -> None:
     args = parse_args()
+    if args.show_latest:
+        print(get_latest_version())
+        return
+    if not args.part:
+        print("error: you must specify which version part to bump", file=sys.stderr)
+        sys.exit(2)
     current = get_latest_version()
     new_version = current.bump(args.part)
     tag_version(new_version)
-    if args.push:
+    should_push = args.push
+    if args.prompt_push:
+        should_push = confirm(
+            f"Push tag term-tree-maker-v{new_version} to origin now?"
+        )
+    if should_push:
         push_tag(new_version)
     print(f"Tagged version {new_version} ({TAG_PREFIX}{new_version})")
     if not args.push:
