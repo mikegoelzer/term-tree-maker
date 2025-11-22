@@ -70,8 +70,8 @@ Common workflows are wrapped in `Makefile`:
 | `make test` | Runs the pytest suite. |
 | `make clean` | Removes build artifacts (`dist/`, `.pytest_cache/`, `.venv/`, etc.). |
 | `make publish-patch` | Runs tests, bumps the patch version (`scripts/bump_version.py patch --push`), and creates the GitHub Release. |
-| `make publish-minor` | Same flow, bumping the minor version. |
-| `make publish-major` | Prompts for confirmation before pushing and releasing a major version. |
+| `make publish-minor` | Same flow, bumping the minor version (the helper script prompts before pushing). |
+| `make publish-major` | Same flow for major bumps; push confirmation is mandatory. |
 
 ---
 
@@ -94,7 +94,7 @@ uv run python scripts/bump_version.py patch --push
 # uv run python scripts/bump_version.py major --push
 ```
 
-The script looks at existing tags, calculates the next semantic version, creates the `term-tree-maker-vX.Y.Z` tag, and optionally pushes it to `origin`.
+The script looks at existing tags, calculates the next semantic version, creates the `term-tree-maker-vX.Y.Z` tag, and optionally pushes it to `origin`. When `--push` is supplied for **minor** or **major** bumps, you’ll be prompted to confirm before the tag is pushed; patch bumps push immediately without prompting.
 
 ### Publishing to PyPI via GitHub Actions
 

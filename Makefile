@@ -19,7 +19,7 @@ publish-minor: test
 	$(MAKE) release-latest
 
 publish-major: test
-	uv run python $(BUMP_SCRIPT) major --prompt-push
+	uv run python $(BUMP_SCRIPT) major --push
 	$(MAKE) release-latest
 
 release-latest:

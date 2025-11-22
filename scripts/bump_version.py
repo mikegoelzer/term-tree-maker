@@ -92,16 +92,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the latest known version (no tagging) and exit.",
     )
-    push_group = parser.add_mutually_exclusive_group()
-    push_group.add_argument(
+    parser.add_argument(
         "--push",
         action="store_true",
-        help="Push the newly created tag to origin.",
-    )
-    push_group.add_argument(
-        "--prompt-push",
-        action="store_true",
-        help="Ask before pushing the tag (safe default for major releases).",
+        help="Push the newly created tag to origin. (Major/minor bumps will still prompt for confirmation.)",
     )
     return parser.parse_args()
 
@@ -130,7 +124,7 @@ def main() -> None:
     new_version = current.bump(args.part)
     tag_version(new_version)
     should_push = args.push
-    if args.prompt_push:
+    if should_push and args.part in {"major", "minor"}:
         should_push = confirm(
             f"Push tag term-tree-maker-v{new_version} to origin now?"
         )
