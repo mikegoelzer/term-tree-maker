@@ -223,25 +223,18 @@ name = "term-tree-maker"
 source = { editable = "." }
 dependencies = [
     { name = "pillow" },
-    { name = "python-dotenv" },
-    { name = "rich" },
-]
-
-[package.optional-dependencies]
-dev = [
     { name = "pytest" },
+    { name = "python-dotenv" },
     { name = "rich" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pillow", specifier = ">=10" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4" },
+    { name = "pytest", specifier = ">=7.4" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "rich", specifier = ">=13" },
-    { name = "rich", marker = "extra == 'dev'", specifier = ">=13" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "tomli"
