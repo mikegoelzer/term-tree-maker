@@ -12,4 +12,6 @@ dist/
 
 # uv lock / state handled by repo already (keep uv.lock tracked)
 .uv/
+uv.lock
 
+.ruff_cache/
