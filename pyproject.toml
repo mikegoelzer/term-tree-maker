@@ -28,10 +28,7 @@ version-file = "src/term_tree_maker/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/term_tree_maker"]
 include = [
-  "src/term_tree_maker/make-tree-screenshot.sh",
-  "src/term_tree_maker/make-png-from-ssh.sh",
-  "src/term_tree_maker/tree.py",
-  "src/term_tree_maker/tree_crop.py",
+  "src/term_tree_maker/term-tree-screenshot-maker.sh",
 ]
 
 [tool.hatch.metadata]
@@ -52,23 +49,24 @@ dependencies = [
   "pillow>=10",
   "pytest>=7.4",
   "curvpyutils>=0.0.49",
+  "curvtools>=0.0.17",
 ]
 
 [project.optional-dependencies]
 dev = [
     "curvpyutils @ file:///home/mwg/curv-python/packages/curvpyutils",
+    "curvtools @ file:///home/mwg/curv-python/packages/curvtools",
 ]
 
 [project.scripts]
-tree = "term_tree_maker.tree:main"
-tree-crop = "term_tree_maker.tree_crop:main"
-make-tree-screenshot = "term_tree_maker.make_tree_screenshot_wrapper:main"
-make-png-from-ssh = "term_tree_maker.make_png_from_ssh_wrapper:main"
+term-tree-maker = "term_tree_maker.__main__:main"
+term-tree-crop-util = "term_tree_maker.term_tree_crop_util:main"
+term-tree-screenshot-maker = "term_tree_maker.term_tree_screenshot_maker_wrapper:main"
 
 [project.urls]
-homepage = "https://github.com/curvcpu/tree-maker"
-repository = "https://github.com/curvcpu/tree-maker"
-documentation = "https://github.com/curvcpu/tree-maker/readme.md"
-issues = "https://github.com/curvcpu/tree-maker/issues"
+homepage = "https://github.com/mikegoelzer/term-tree-maker"
+repository = "https://github.com/mikegoelzer/term-tree-maker"
+documentation = "https://github.com/mikegoelzer/term-tree-maker/readme.md"
+issues = "https://github.com/mikegoelzer/term-tree-maker/issues"
 
 

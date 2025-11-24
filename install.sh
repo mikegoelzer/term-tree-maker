@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Fail fast
 set -euo pipefail
 
@@ -6,7 +7,7 @@ set -euo pipefail
 
 # Must NOT be run over SSH
 if [[ -n "${SSH_CONNECTION-}" || -n "${SSH_CLIENT-}" || -n "${SSH_TTY-}" ]]; then
-  echo "ERROR: install.sh must be run from a local desktop session, not over SSH." >&2
+  echo "ERROR: install.sh must be run from a local desktop session, not over SSH" >&2
   exit 1
 fi
 
@@ -15,17 +16,6 @@ if [[ -z "${DISPLAY-}" ]]; then
   echo "ERROR: DISPLAY is not set; are you in a GUI session?" >&2
   exit 1
 fi
-
-# make sure we are in the right directory
-SCRIPT_RELATIVE_PATH="src/term_tree_maker/make-tree-screenshot.sh"
-if [[ ! -f "$PWD/${SCRIPT_RELATIVE_PATH}" ]]; then
-  echo "ERROR: install.sh must be run from the repo root (expected to find ${SCRIPT_RELATIVE_PATH})" >&2
-  echo "Current directory: \`$PWD\`" >&2
-  exit 1
-fi
-
-# get the absolute path to the directory containing make-tree-screenshot.sh
-TREE_SHOT_DIR=$(dirname "$(realpath "$PWD/${SCRIPT_RELATIVE_PATH}")")
 
 # ---- import the current GUI env into the user systemd instance -------------
 
@@ -57,6 +47,7 @@ while IFS='=' read -r name value; do
   done
 done < <(systemctl --user show-environment)
 
+export IN_DESKTOP_ENV_WRAPPER=1
 exec "$@"
 EOF
 
@@ -66,12 +57,13 @@ sudo chmod +x /usr/local/bin/desktop-env-wrapper
 cat > ~/.local/share/konsole/TreeShot.profile <<EOF
 [General]
 Command=/bin/bash
-Directory=${TREE_SHOT_DIR}
 Name=TreeShot
 Parent=FALLBACK/
 StartInCurrentSessionDir=false
 TerminalColumns=80
 TerminalRows=50
+LocalTabTitleFormat=TREESHOT : %d : %n
+RemoteTabTitleFormat=TREESHOT : (%u) %H
 
 [Keyboard]
 KeyBindings=macos
@@ -82,6 +74,5 @@ EOF
 
 echo "desktop-env-wrapper installed in /usr/local/bin"
 echo "From SSH, you can now run:"
-FIRST_CMD="cd ${TREE_SHOT_DIR}; "
-SECOND_CMD="./make-tree-screenshot.sh"
-echo "  desktop-env-wrapper konsole --profile TreeShot -e bash -lc '${FIRST_CMD}${SECOND_CMD}'"
+CMD="term-tree-screenshot-maker"
+echo "  desktop-env-wrapper konsole --profile TreeShot -e bash -lc '${CMD}'"

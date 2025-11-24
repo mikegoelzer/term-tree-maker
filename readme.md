@@ -21,36 +21,28 @@ After installing, three console commands are available everywhere on your PATH:
 
 | Command | Description |
 |---------|-------------|
-| `tree` | Runs the packaged `tree.py` script that generates the text-based tree visualization. All original CLI flags still work. |
-| `make-tree-screenshot` | Launches the Konsole/gnome-screenshot workflow to capture the tree output into PNGs (wraps `make-tree-screenshot.sh`). |
-| `make-png-from-ssh` | Convenience wrapper for invoking the screenshot workflow from an SSH session (wraps `make-png-from-ssh.sh`). |
+| `term-tree-maker` | Runs the packaged `term_tree_maker.py` script that generates the text-based tree visualization. All original CLI flags still work. |
+| `term-tree-screenshot-maker` | Launches the Konsole/gnome-screenshot workflow to capture the tree output into PNGs (wraps `term-tree-screenshot-maker.sh`). |
+| `term-tree-crop-util` | Utility for cropping the tree screenshot into a single PNG file. This is an internal utility used by `term-tree-screenshot-maker` and doesn't need to be run manually.|
 
 Each command accepts the same arguments as its original script. Example:
 
 ```bash
-tree --chunk-lines-amount 70 --chunk-count
-make-tree-screenshot output/my-tree
-make-png-from-ssh
+term-tree-maker --chunk-lines-amount 70 --chunk-count --dummy-data
+term-tree-screenshot-maker -o output -e .env
 ```
-
-> **Note:** The first-time desktop environment preparation (`install.sh`) is still required on the target GNOME machine. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the full setup checklist.
 
 ## Installation
 
-- From the Gnome console (physically at the machine or over RDP):
+- Run the installation script one time from a Gnome or KDE console.  You must be physically at the machine or connected over VNC/RDP.  This will **NOT work over SSH**:
 
 ```bash
 cd <this directory>
-[ -f $PWD/src/term_tree_maker/make-tree-screenshot.sh ] && echo "✅ good you're in the right dir: $PWD" || echo "ERROR: you're in the wrong dir"
+# requires sudo privileges:
+./install.sh && echo "✅ Installed term-tree-maker" >&1 || echo "❌ Failed to install term-tree-maker" >&2
 ```
 
-The above just verifies that we are in the right directory because `install.sh` won't work otherwise.  It writes config files the current value of `$PWD`.
-
-
-```bash
-./install.sh && echo "✅ Installed tree-maker" >&1 || ( echo "❌ Failed to install tree-maker" >&2 && exit 1 )
-```
-
+<!-- 
 - Append this to your `~/.bashrc` to make it easier to run:
 
 ```bash
@@ -63,19 +55,21 @@ export QT_QPA_PLATFORM=wayland
 ```bash
 source ~/.bashrc
 ```
+-->
 
 ## Usage
 
-- From an SSH session into the server where the tree-maker is installed:
+- From an SSH session into the server where the term-tree-maker is installed:
 
 ```bash
-[user@server] make-png-from-ssh
-[user@server] it2dl tree.png   # download the tree image to your local machine
-[user@server] imgcat tree.png  # display the tree image in your local terminal
+[user@server] term-tree-maker --chunk-lines-amount 70 --chunk-count --dummy-data
+[user@server] term-tree-screenshot-maker -o output -e .env
+[user@server] it2dl output/tree.png   # download the tree image to your local machine
+[user@server] imgcat output/tree.png  # display the tree image in your local terminal
 ```
 
 - Or run the screenshot workflow locally (GNOME desktop session) with a custom output prefix:
 
 ```bash
-make-tree-screenshot output/my-tree
+term-tree-screenshot-maker -o output -e .env
 ```

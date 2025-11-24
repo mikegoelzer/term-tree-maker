@@ -2,7 +2,7 @@ import sys
 
 import pytest
 
-import term_tree_maker.tree as tree
+import term_tree_maker.term_tree_maker as term_tree_maker
 
 
 def _dummy_root():
@@ -12,12 +12,12 @@ def _dummy_root():
 
 
 def test_tree_main_exits_zero(monkeypatch):
-    monkeypatch.setattr(tree, "make_data_from_path_env", lambda *args, **kwargs: _dummy_root())
-    monkeypatch.setattr(tree, "calculate_max_comment_line_width", lambda *args, **kwargs: 80)
-    monkeypatch.setattr(sys, "argv", ["tree"])
+    monkeypatch.setattr(term_tree_maker, "make_data_from_path_env", lambda *args, **kwargs: _dummy_root())
+    monkeypatch.setattr(term_tree_maker, "calculate_max_comment_line_width", lambda *args, **kwargs: 80)
+    monkeypatch.setattr(sys, "argv", ["term-tree-maker"])
 
     with pytest.raises(SystemExit) as excinfo:
-        tree.main()
+        term_tree_maker.main()
 
     assert excinfo.value.code == 0
 
