@@ -73,6 +73,3 @@ HistoryMode=2
 EOF
 
 echo "desktop-env-wrapper installed in /usr/local/bin"
-echo "From SSH, you can now run:"
-CMD="term-tree-screenshot-maker"
-echo "  desktop-env-wrapper konsole --profile TreeShot -e bash -lc '${CMD}'"

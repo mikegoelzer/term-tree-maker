@@ -27,9 +27,6 @@ version-file = "src/term_tree_maker/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/term_tree_maker"]
-include = [
-  "src/term_tree_maker/term-tree-screenshot-maker.sh",
-]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -60,8 +57,6 @@ dev = [
 
 [project.scripts]
 term-tree-maker = "term_tree_maker.__main__:main"
-term-tree-crop-util = "term_tree_maker.term_tree_crop_util:main"
-term-tree-screenshot-maker = "term_tree_maker.term_tree_screenshot_maker_wrapper:main"
 
 [project.urls]
 homepage = "https://github.com/mikegoelzer/term-tree-maker"
