@@ -18,23 +18,25 @@ $(VENVDIR)/bin/python:
 	$(UV) sync --extra dev
 
 upgrade-venv-for-dev: venv
-	$(UV) pip install -e $(LOCAL_CURVPYUTILS_PATH) -e $(LOCAL_CURVTOOLS_PATH)
+	$(UV) pip install -e .[dev] -e $(LOCAL_CURVPYUTILS_PATH) -e $(LOCAL_CURVTOOLS_PATH)
 
 install-tools-dev:
-	$(UV) tool install --editable $(PKG_TERM_TREE_MAKER_PATH)[dev] --with-editable $(LOCAL_CURVPYUTILS_PATH) --with-editable $(LOCAL_CURVTOOLS_PATH) && \
+	$(UV) tool install --editable .[dev] --with-editable $(LOCAL_CURVPYUTILS_PATH) --with-editable $(LOCAL_CURVTOOLS_PATH) && \
 		echo "✓ Installed $(PKG_TERM_TREE_MAKER)[dev] as tool..." \
 		|| echo "✗ Failed to install $(PKG_TERM_TREE_MAKER)[dev]..."
 	@# Edit shell's rc file to keep the PATH update persistent
 	@$(UV) tool update-shell -q && \
 		echo "✓ Updated shell to use the new $(notdir $(PKG_TERM_TREE_MAKER))[dev]..." \
 		|| echo "✗ Failed to update shell..."
-	@echo "⚠️ You need to run \`install.sh\` once (from a local GUI desktop session) to complete the installation"
+	$(UV) pip install -e $(LOCAL_CURVPYUTILS_PATH) -e $(LOCAL_CURVTOOLS_PATH)
 
 # alias for install-min
 install: install-min
 
-install-dev: install-min upgrade-venv-for-dev install-tools-dev
+install-dev: upgrade-venv-for-dev install-tools-dev
+	@$(UV) pip install -e .[dev] -e $(LOCAL_CURVPYUTILS_PATH) -e $(LOCAL_CURVTOOLS_PATH)
 	@echo "✓ term-tree-maker, global CLI tools + local curvpyutils/curvtools installed in $(VENVDIR)"
+	@echo "⚠️ You need to run \`install.sh\` once (from a local GUI desktop session) to complete the installation"
 
 # installs only the package (in editable mode)
 install-min: venv
@@ -46,12 +48,16 @@ install-min: venv
 		echo "✓ Installed $(PKG_TERM_TREE_MAKER)..."; \
 	fi;
 
-test: upgrade-venv-for-dev
-	$(UV) run pytest
+test:
+	@# --no-sync is important if curvpyutils/curvtools are installed as editable local packages;
+	@# without it, any `uv run` blows away the local package install settings in the venv, requiring
+	@# a new `make install-dev`
+	$(UV) run --no-sync pytest
 
 clean:
 	@$(UV) tool uninstall $(PKG_TERM_TREE_MAKER) || true; \
 		echo "✓ Uninstalled $(PKG_TERM_TREE_MAKER)...";
+	@$(UV) cache clean
 	@rm -rf build dist .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
@@ -66,7 +72,7 @@ clean:
 		$(RM) -rf $(VENVDIR) ; \
 		echo "✓ Removed $(VENVDIR)"; \
 	} || { \
-		echo "✓ Skipping venv cleanup since $(VENVDIR) does not exist"; \
+		echo "~ Skipping venv cleanup since $(VENVDIR) does not exist"; \
 	}
 
 publish-patch: test
