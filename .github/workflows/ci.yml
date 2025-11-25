@@ -37,7 +37,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      # pin to a specific uv version that works so we don't get burned by breaking changes later
       - uses: astral-sh/setup-uv@v4
+        with:
+          version: 0.9.7
 
       - name: Cache uv
         uses: actions/cache@v4
