@@ -70,19 +70,19 @@ clean:
 	}
 
 publish-patch: test
-	uv run python $(BUMP_SCRIPT) patch --push
+	$(UV) run python $(BUMP_SCRIPT) patch --push
 	$(MAKE) release-latest
 
 publish-minor: test
-	uv run python $(BUMP_SCRIPT) minor --push
+	$(UV) run python $(BUMP_SCRIPT) minor --push
 	$(MAKE) release-latest
 
 publish-major: test
-	uv run python $(BUMP_SCRIPT) major --push
+	$(UV) run python $(BUMP_SCRIPT) major --push
 	$(MAKE) release-latest
 
 release-latest:
-	@version="$$(uv run python $(BUMP_SCRIPT) --show-latest)" ; \
+	@version="$$($(UV) run python $(BUMP_SCRIPT) --show-latest)" ; \
 	tag="$(TAG_PREFIX)$$version" ; \
-	gh release create "$$tag" --title "term-tree-maker v$$version" --notes "Automated release $$tag"
+	gh release create "$$tag" --title "term-tree-maker-v$$version" --notes "Automated release $$tag"
 
