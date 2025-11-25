@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --script --extra dev --frozen
+#!/usr/bin/env -S uv run --script --extra dev
 
 from PIL import Image
 import os
