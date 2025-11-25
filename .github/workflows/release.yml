@@ -34,7 +34,7 @@ jobs:
           key: uv-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
 
       - name: Sync dependencies
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Run pytest
         run: uv run pytest
