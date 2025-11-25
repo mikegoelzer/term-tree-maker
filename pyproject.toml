@@ -1,13 +1,5 @@
 [build-system]
-requires = [
-  "hatchling>=1.24", 
-  "hatch-vcs>=0.4",
-  "pytest>=7",
-  "pytest-xdist>=3",
-  "ruff>=0.6",
-  "build>=1.0",
-  "twine>=6.0",
-]
+requires = ["hatchling>=1.24", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
@@ -28,9 +20,6 @@ version-file = "src/term_tree_maker/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/term_tree_maker"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
 [project]
 name = "term-tree-maker"
 requires-python = ">=3.10"
@@ -44,15 +33,17 @@ dependencies = [
   "rich>=13",
   "python-dotenv>=1.1.0",
   "pillow>=10",
-  "pytest>=7.4",
   "curvpyutils>=0.0.49",
-  "curvtools>=0.0.17",
+  "curvtools>=0.0.17"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "curvpyutils @ file:///home/mwg/curv-python/packages/curvpyutils",
-    "curvtools @ file:///home/mwg/curv-python/packages/curvtools",
+  "pytest>=7.4",
+  "pytest-xdist>=3",
+  "ruff>=0.6",
+  "build>=1.0",
+  "twine>=6.0",
 ]
 
 [project.scripts]

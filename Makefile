@@ -10,36 +10,31 @@ DEFAULT_OUTPUT_DIR := output
 LOCAL_CURVPYUTILS_PATH := ../../../curv-python/packages/curvpyutils
 LOCAL_CURVTOOLS_PATH := ../../../curv-python/packages/curvtools
 
-.PHONY: test clean venv dev-venv publish-patch publish-minor publish-major release-latest install-dev install-min
+.PHONY: test clean venv upgrade-venv-for-dev publish-patch publish-minor publish-major release-latest install-dev install-min install-tools-dev
 
 venv: $(VENVDIR)/bin/python
 $(VENVDIR)/bin/python:
-	$(UV) venv --seed
+	$(UV) venv --seed $(VENVDIR)
+	$(UV) sync --extra dev
 
-dev-venv: venv
-	$(UV) venv $(VENVDIR) --clear --seed --find-links $(LOCAL_CURVPYUTILS_PATH) --find-links $(LOCAL_CURVTOOLS_PATH)
+upgrade-venv-for-dev: venv
+	$(UV) pip install -e $(LOCAL_CURVPYUTILS_PATH) -e $(LOCAL_CURVTOOLS_PATH)
 
-install-dev: dev-venv
-	$(UV) pip install --editable .[dev] --editable $(LOCAL_CURVPYUTILS_PATH) --editable $(LOCAL_CURVTOOLS_PATH) --find-links $(LOCAL_CURVPYUTILS_PATH) --find-links $(LOCAL_CURVTOOLS_PATH) || true; \
-		echo "✓ Installed .[dev]...";
+install-tools-dev:
 	$(UV) tool install --editable $(PKG_TERM_TREE_MAKER_PATH)[dev] --with-editable $(LOCAL_CURVPYUTILS_PATH) --with-editable $(LOCAL_CURVTOOLS_PATH) && \
-		echo "✓ Installed $(PKG_TERM_TREE_MAKER)[dev]..."; 
+		echo "✓ Installed $(PKG_TERM_TREE_MAKER)[dev] as tool..." \
+		|| echo "✗ Failed to install $(PKG_TERM_TREE_MAKER)[dev]..."
 	@# Edit shell's rc file to keep the PATH update persistent
-	@$(UV) tool update-shell -q || true; \
-		echo "✓ Updated shell to use the new $(notdir $(PKG_TERM_TREE_MAKER))[dev]...";
-	@# $(UV) pip install --editable $(LOCAL_CURVPYUTILS_PATH) && \
-	# 	echo "✓ Re-installed $(LOCAL_CURVPYUTILS_PATH)...";
-	@# $(UV) pip install --editable $(LOCAL_CURVTOOLS_PATH) && \
-	# 	echo "✓ Re-installed $(LOCAL_CURVTOOLS_PATH)...";
+	@$(UV) tool update-shell -q && \
+		echo "✓ Updated shell to use the new $(notdir $(PKG_TERM_TREE_MAKER))[dev]..." \
+		|| echo "✗ Failed to update shell..."
 	@echo "⚠️ You need to run \`install.sh\` once (from a local GUI desktop session) to complete the installation"
 
-# does installl-min + uv tool install's + create desktop_env_wrapper and profile
+# alias for install-min
 install: install-min
-	@$(UV) tool install --editable $(PKG_TERM_TREE_MAKER)
-	@echo "✓ All CLI tools (editable) available on PATH"
-	@# Edit shell's rc file to keep the PATH update persistent
-	@$(UV) tool update-shell -q || true
-	@echo "⚠️ You need to run \`install.sh\` once (from a local GUI desktop session) to complete the installation"
+
+install-dev: install-min upgrade-venv-for-dev install-tools-dev
+	@echo "✓ term-tree-maker, global CLI tools + local curvpyutils/curvtools installed in $(VENVDIR)"
 
 # installs only the package (in editable mode)
 install-min: venv
@@ -51,14 +46,12 @@ install-min: venv
 		echo "✓ Installed $(PKG_TERM_TREE_MAKER)..."; \
 	fi;
 
-test:
-	uv run pytest
+test: upgrade-venv-for-dev
+	$(UV) run pytest
 
 clean:
 	@$(UV) tool uninstall $(PKG_TERM_TREE_MAKER) || true; \
 		echo "✓ Uninstalled $(PKG_TERM_TREE_MAKER)...";
-	@$(UV) pip uninstall $(PKG_TERM_TREE_MAKER)[dev] || true; \
-		echo "✓ Uninstalled $(PKG_TERM_TREE_MAKER)[dev]...";
 	@rm -rf build dist .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
