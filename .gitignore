@@ -19,3 +19,5 @@ uv.lock
 # any log files that wind up in this dir
 *.log
 *.log2
+
+output/
