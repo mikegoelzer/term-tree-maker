@@ -14,12 +14,15 @@ from rich.console import Console
 from rich.measure import Measurement
 from rich.markup import escape
 import re
-from typing import ClassVar, Any, Callable
+from typing import ClassVar, Any, Callable, Optional
 from enum import Enum
 from textwrap import TextWrapper
 import argparse
 from curvtools.cli.curvcfg.lib.util import CfgValue, CfgValues
 import logging
+from . import init_logging
+from .settings import get_env_or_defaults, LOG_FILE_WIDTH_BUFFER
+from curvpyutils.colors import AnsiColorsTool
 
 log = logging.getLogger(__name__)
 
@@ -821,40 +824,45 @@ def calculate_max_comment_line_width(tree: Tree, spacing_after_tree: int = DEFAU
         max_comment_line_width = 0
     return max_comment_line_width
 
-def parse_args() -> argparse.Namespace:
+def parse_args(grandparent_parser: Optional[argparse.ArgumentParser] = None) -> argparse.Namespace:
     parent_parser = argparse.ArgumentParser(add_help=False)
-    #parent_parser.parse_known_args()
+    ansi = AnsiColorsTool()
+    ANSI_GREY = ansi.lt_grey
+    ANSI_DARK_GREY = ansi.drk_grey
+    ANSI_BOLD = ansi.bold
+    ANSI_BRIGHT_BLUE = ansi.bright_blue
+    ANSI_RESET = ansi.reset
     parser = argparse.ArgumentParser(
         description="Render a tree of files / directories",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=([grandparent_parser] if grandparent_parser is not None else []),
         epilog="""
-EXAMPLES:
+{ANSI_BOLD}Examples:{ANSI_RESET}
 
-$ {prog} -xt
-[...prints the entire tree with extra top lines for screenshotting...]
+  $ {ANSI_BRIGHT_BLUE}{prog} -d{ANSI_RESET}
+  {ANSI_GREY}[...prints the entire tree based on test data...]{ANSI_RESET}
 
-# -q flag emits lines that can be eval'd in a shell script for loop control
-# and terminal sizing on the last chunk
-$ {prog} -L 70 -q
-CHUNKS_COUNT=2
-LAST_CHUNK_LINE_COUNT=35
+  $ {ANSI_BRIGHT_BLUE}{prog} -e [env-file-path]{ANSI_RESET}
+  {ANSI_GREY}[...prints the entire tree based on the environment file specified by -e/--env-file...]{ANSI_RESET}
 
-# use eval to extract just one or the other of the two numeric values
-$ eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$CHUNKS_COUNT"
-2
-$ eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$LAST_CHUNK_LINE_COUNT"
-35
+  {ANSI_DARK_GREY}# -q flag emits lines that can be eval'd in a shell script{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -q{ANSI_RESET}
+  {ANSI_GREY}CHUNKS_COUNT=2{ANSI_RESET}
+  {ANSI_GREY}LAST_CHUNK_LINE_COUNT=35{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$CHUNKS_COUNT"{ANSI_RESET}
+  {ANSI_GREY}2{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$LAST_CHUNK_LINE_COUNT"{ANSI_RESET}
+  {ANSI_GREY}35{ANSI_RESET}
 
-# print just the first chunk
-$ {prog} -L 70 -l 0
-[...prints the first chunk of 70 lines...]
-$ {prog} -L 70 -l 1
-[...prints the second chunk of 35 lines...]
-$ {prog} -L 70 -l 2
-No more chunks remaining
-""".format(prog=parent_parser.prog),
+  {ANSI_DARK_GREY}# print one chunk at a time{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -l 0{ANSI_RESET}
+  {ANSI_GREY}[...prints the first chunk of 70 lines...]{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -l 1{ANSI_RESET}
+  {ANSI_GREY}[...prints the second chunk of 35 lines...]{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -l 2{ANSI_RESET}
+  {ANSI_GREY}No more chunks remaining{ANSI_RESET}
+""".format(prog=parent_parser.prog, ANSI_GREY=ANSI_GREY, ANSI_DARK_GREY=ANSI_DARK_GREY, ANSI_RESET=ANSI_RESET, ANSI_BOLD=ANSI_BOLD, ANSI_BRIGHT_BLUE=ANSI_BRIGHT_BLUE),
     )
-    parser.add_argument("--insert-extra-top-line", '-xt', action="store_true", default=False, help="insert extra top line above the tree (default: %(default)s).")
     chunk_group = parser.add_argument_group("Chunk Mode Options")
     chunk_group.add_argument("--chunk-lines-amount", '-L', type=int, default=None, help="Emit lines in chunks of this amount. If 0, will print the entire tree.  If not specified, will print the entire tree and chunk mode is disabled so other options like --chunk-number and --chunks-count are ignored.")
     chunk_group.add_argument("--chunk-number", '-l', type=int, default=0, help="If there are more than --chunk-lines-amount lines, emit this chunk. The first chunk is numbered zero.  If you request a chunk number beyond the final one, the program will exit with code 1 to indicate no additional lines remain.  Ignored unless --chunk-lines-amount/-L is specified. (Default: %(default)s).")
@@ -865,19 +873,33 @@ No more chunks remaining
     data_source_group_mutex.add_argument("--dummy-data", '-d', dest="data_source", action="store_const", const="USE_DUMMY_DATA", help="Use dummy data instead of the data source (default).")
     parser.set_defaults(data_source="USE_DUMMY_DATA")
     args = parser.parse_args()
+
     if args.data_source is None:
         parser.error("Either --env-file or --dummy-data must be specified.")
+    
+    try:
+        console.width = args.width
+    except Exception as e:
+        log.error(f"ERROR: could not set console width to {args.width}: {e}")
+        raise SystemExit(1) from e
+
     return args
 
-def main() -> None:
-    args = parse_args()
-    max_comment_line_width = None # initial value to prevent any spilling until we know tree width
+def main(parent_parser: Optional[argparse.ArgumentParser] = None) -> None:
+    env_values:dict[str, int | str] = {}
+    env_values = get_env_or_defaults()
+
+    def logger_strip_ansi(s: str) -> str:
+        ansi_re = re.compile(r"\x1b\[[0-9;]*m")
+        return ansi_re.sub("", s).rstrip()
+
+    args = parse_args(grandparent_parser=parent_parser)
     
     # use either dummy data or the environment file to make the data per the CLI args
+    max_comment_line_width = None # initial value to prevent any spilling until we know tree width
     if args.data_source == "USE_DUMMY_DATA":
         data_fn = lambda max_comment_line_width: make_dummy_data(max_comment_line_width)
     else:
-        # treat data source as a path to an environment file
         data_fn = lambda max_comment_line_width: make_data_from_path_env(max_comment_line_width, env_file=args.data_source)
     
     # make the Node tree from the data source
@@ -912,31 +934,31 @@ def main() -> None:
     invisible_table.add_row(tree, Text.assemble(*text_nodes[:-1]))
 
     def ansi_aware_replace(s: str) -> str:
-        ANSI = r"\x1b\[[0-9;]*m"
+        ANSI_RE = r"\x1b\[[0-9;]*m"
 
         # prefix: any number of SGRs applied to the guides
         # mid:    any SGRs between the guides and "<"
         pat_non_corner = re.compile(
-            rf"(?P<prefix>(?:{ANSI})*)┣━━ (?P<mid>(?:{ANSI})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI})*)(?P<comment>[^\n]*)"
+            rf"(?P<prefix>(?:{ANSI_RE})*)┣━━ (?P<mid>(?:{ANSI_RE})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI_RE})*)(?P<comment>[^\n]*)"
         )
         pat_corner = re.compile(
-            rf"(?P<prefix>(?:{ANSI})*)┗━━ (?P<mid>(?:{ANSI})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI})*)(?P<comment>[^\n]*)"
+            rf"(?P<prefix>(?:{ANSI_RE})*)┗━━ (?P<mid>(?:{ANSI_RE})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI_RE})*)(?P<comment>[^\n]*)"
         )
         # pat_last_node_in_subtree = re.compile(
         #     rf"(?P<prefix>(?:{ANSI})*)┣━━ (?P<mid0>(?:{ANSI})*)📄 (?P<mid1>(?:{ANSI})*)(?P<name>[^\n<\x1b]*)(?P<mid2>(?:{ANSI})*)(?P<precomment_space>\s*<<<<\s*)(?P<mid3>(?:{ANSI})*)(?P<comment>[^\n]*)"
         # )
         pat_last_node_in_subtree2 = re.compile(
             rf"""
-            (?P<prefix>(?:{ANSI})*)           # guides / prefix
+            (?P<prefix>(?:{ANSI_RE})*)            # guides / prefix
             [┗|┣]━━\s                             # literal guides and space
-            (?P<mid0>(?:{ANSI})*)             # color for the leaf
-            📄\s                              # leaf emoji + space
-            (?P<mid1>(?:{ANSI})*)             # any ANSI before name
-            (?P<name>[^\n<\x1b]*)             # name: anything but newline, '<', or ESC
-            (?P<mid2>(?:{ANSI})*)             # ANSI after name
-            (?P<precomment_space>\s*<<<<\s*)  # require '<<<<' (with optional spaces)
-            (?P<mid3>(?:{ANSI})*)             # ANSI before comment
-            (?P<comment>[^\n]*)               # rest of the line, up to newline
+            (?P<mid0>(?:{ANSI_RE})*)              # color for the leaf
+            📄\s                                  # leaf emoji + space
+            (?P<mid1>(?:{ANSI_RE})*)              # any ANSI before name
+            (?P<name>[^\n<\x1b]*)                 # name: anything but newline, '<', or ESC
+            (?P<mid2>(?:{ANSI_RE})*)              # ANSI after name
+            (?P<precomment_space>\s*<<<<\s*)      # require '<<<<' (with optional spaces)
+            (?P<mid3>(?:{ANSI_RE})*)              # ANSI before comment
+            (?P<comment>[^\n]*)                   # rest of the line, up to newline
             """,
             re.VERBOSE,
         )
@@ -1019,15 +1041,13 @@ def main() -> None:
         console.print(invisible_table)
     s = capture.get()
     s = ansi_aware_replace(s)
-    if args.insert_extra_top_line:
-        print("")
 
     if args.chunk_lines_amount is None or args.chunk_lines_amount == 0:
         lines = s.split('\n')
         for ln in lines:
             if ln.strip() != "":
                 print(ln)
-                log.info(ln)
+                log.debug(logger_strip_ansi(ln))
         sys.exit(0)
     else:
         # chunk mode enabled
@@ -1043,7 +1063,7 @@ def main() -> None:
         elif args.chunk_number < len(chunks):
             for ln in chunks[args.chunk_number]:
                 print(ln)
-                log.info(escape(ln))
+                log.debug(logger_strip_ansi(escape(ln)))
             sys.exit(0)
         else:
             console.print("No more chunks remaining")
@@ -1056,6 +1076,6 @@ if __name__ == "__main__":
     except SystemExit as e:
         sys.exit(e.code)
     except Exception as e:
-        log.exception(f"Error: {e}")
-        raise SystemExit(1)
+        log.critical(f"Error: %s", e, exc_info=True)
+        sys.exit(1)
 

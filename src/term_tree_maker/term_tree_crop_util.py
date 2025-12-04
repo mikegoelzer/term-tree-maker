@@ -10,19 +10,17 @@ import shutil
 from pathlib import Path
 import json
 import logging
+from term_tree_maker.settings import get_env_or_defaults
 from term_tree_maker import init_logging
 
 log = logging.getLogger(__name__)
-
-# TODO: this should automatically match with what's in tree-screenshot-maker.sh
-EXTRA_ROWS = 1
 
 def compute_char_width_and_height(window_dimensions: dict[str, int]) -> tuple[int, int]:
     w = window_dimensions['windowWidth'] // window_dimensions['cols']
     h = window_dimensions['windowHeight'] // window_dimensions['rows']
     return w, h
 
-def crop_tree_image(img_path: str, output_path: Optional[str] = None, window_dimensions: Optional[dict[str, int]] = None) -> str:
+def crop_tree_image(img_path: str, output_path: Optional[str] = None, window_dimensions: Optional[dict[str, int]] = None, extra_rows: int = 1) -> str:
     WIDTH_OF_CHAR, HEIGHT_OF_CHAR = compute_char_width_and_height(window_dimensions)
     
     excess_window_height = window_dimensions['windowHeight'] - (window_dimensions['rows']*HEIGHT_OF_CHAR)
@@ -37,7 +35,7 @@ def crop_tree_image(img_path: str, output_path: Optional[str] = None, window_dim
 
     top_trim    = top_excess_pixels
     right_trim  = scroll_bar_width
-    bottom_trim = (EXTRA_ROWS*HEIGHT_OF_CHAR) + bottom_excess_pixels
+    bottom_trim = (extra_rows*HEIGHT_OF_CHAR) + bottom_excess_pixels
     left_trim   = 0
 
     img = Image.open(img_path)
@@ -126,6 +124,14 @@ def parse_args():
 
 
 def main():
+    env_values:dict[str, int | str] = {}
+    try:
+        init_logging()
+        env_values = get_env_or_defaults()
+    except Exception as e:
+        log.error(f"ERROR: could not initialize logging: {e}")
+        raise SystemExit(1) from e
+
     args = parse_args()
 
     with open(args.window_dimensions_json_file, "r", encoding="utf-8") as f:
@@ -136,7 +142,7 @@ def main():
     if len(args.img_paths) == 1:
         # Single-image mode
         img_path = args.img_paths[0]
-        cropped = crop_tree_image(img_path, args.output_path, window_dimensions=window_dimensions[0])
+        cropped = crop_tree_image(img_path, args.output_path, window_dimensions=window_dimensions[0], extra_rows=env_values['TERM_TREE_MAKER_EXTRA_ROWS'])
         log.info(f"Cropped image saved to: {cropped}")
     else:
         # Multi-image mode: crop all and stack vertically
@@ -146,7 +152,7 @@ def main():
                 shutil.copyfile(p, p.replace(".png", ".before-crop.png"))
                 log.info(f"Preserved original image: {p.replace('.png', '.before-crop.png')}")
             log.info(f"Cropping image: {p} ({i+1} of {len(args.img_paths)})")
-            cropped_image_paths.append(crop_tree_image(p, window_dimensions=window_dimensions[i]))
+            cropped_image_paths.append(crop_tree_image(p, window_dimensions=window_dimensions[i], extra_rows=env_values['TERM_TREE_MAKER_EXTRA_ROWS']))
         stacked = stack_images_vertically(cropped_image_paths)
 
         if args.output_path is None:
@@ -160,10 +166,9 @@ def main():
 
 if __name__ == "__main__":
     try:
-        init_logging()
         sys.exit(main())
     except SystemExit as e:
         sys.exit(e.code)
     except Exception as e:
-        log.exception(f"Error: {e}")
-        raise SystemExit(1)
+        log.critical(f"Error: %s", e, exc_info=True)
+        raise SystemExit(1) from e

@@ -43,7 +43,7 @@ it2_command() {
 ENV_FILE="USE_DUMMY_DATA"
 OUTPUT_DIR="output"
 # whether to delete temporary files after use
-DEBUG_PRESERVE_TMP_FILES=1
+DEBUG_PRESERVE_TMP_FILES=${TERM_TREE_MAKER_DEBUG_PRESERVE_TMP_FILES:-0} # 1 to preserve, 0 to delete
 
 # parse command line arguments
 while getopts "e:o:" opt; do
@@ -65,15 +65,21 @@ while getopts "e:o:" opt; do
 done
 
 # width we will use for measuring number of lines and screenshotting
-COLS=120
+COLS=${TERM_TREE_MAKER_COLS:-120}
 # initial height is arbitrary, will be adjusted once we measure line count
 ROWS=10
 # if the total number of rows exceeds this value, then we will chunk by this
 # amount and generate multiple output files (tree-0.png, tree-1.png, etc.)
-CHUNK_LINES_AMOUNT=50
+CHUNK_LINES_AMOUNT=${TERM_TREE_MAKER_CHUNK_LINES_AMOUNT:-50}
 
 # how many rows you want to add as buffer to the Konsole instances we screenshot
-EXTRA_ROWS=1
+DEFAULT_EXTRA_ROWS=$(python -c 'import runpy; ns = runpy.run_path("src/term_tree_maker/settings.py"); print(ns["DEFAULT_EXTRA_LINES"])')
+if [[ "$?" -eq 0 ]]; then
+    EXTRA_ROWS=${TERM_TREE_MAKER_EXTRA_ROWS:-$DEFAULT_EXTRA_ROWS}
+else
+	EXTRA_ROWS=${TERM_TREE_MAKER_EXTRA_ROWS:-1}
+fi
+
 
 PYTHON_SCRIPT="term-tree-maker"
 if [[ "${ENV_FILE}" != "USE_DUMMY_DATA" ]]; then
