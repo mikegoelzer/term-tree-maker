@@ -73,7 +73,7 @@ ROWS=10
 CHUNK_LINES_AMOUNT=${TERM_TREE_MAKER_CHUNK_LINES_AMOUNT:-50}
 
 # how many rows you want to add as buffer to the Konsole instances we screenshot
-DEFAULT_EXTRA_ROWS=$(python -c 'import runpy; ns = runpy.run_path("src/term_tree_maker/settings.py"); print(ns["DEFAULT_EXTRA_LINES"])')
+DEFAULT_EXTRA_ROWS=$(python -c 'import runpy; ns = runpy.run_path("src/term_tree_maker/settings.py"); print(ns["DEFAULT_EXTRA_ROWS"])')
 if [[ "$?" -eq 0 ]]; then
     EXTRA_ROWS=${TERM_TREE_MAKER_EXTRA_ROWS:-$DEFAULT_EXTRA_ROWS}
 else

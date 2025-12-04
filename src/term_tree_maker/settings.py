@@ -76,7 +76,7 @@ def ensure_log_dir_exists() -> None:
 # Environment variable constants used in python and shell script
 ###############################################################################
 
-DEFAULT_EXTRA_LINES              = 1
+DEFAULT_EXTRA_ROWS              = 1
 DEFAULT_COLS                     = 120
 DEFAULT_CHUNK_LINES_AMOUNT       = 50
 DEFAULT_DEBUG_PRESERVE_TMP_FILES = 0 # 1 to preserve, 0 to delete
@@ -86,7 +86,7 @@ def get_env_or_defaults() -> dict[str, int | str]:
     Get the TERM_TREE_MAKER_* environment variables or their default values.
     """
     defaults = {
-        f"{TERM_TREE_MAKER_ENV_VAR_PREFIX}EXTRA_LINES":              DEFAULT_EXTRA_LINES,
+        f"{TERM_TREE_MAKER_ENV_VAR_PREFIX}EXTRA_ROWS":               DEFAULT_EXTRA_ROWS,
         f"{TERM_TREE_MAKER_ENV_VAR_PREFIX}COLS":                     DEFAULT_COLS,
         f"{TERM_TREE_MAKER_ENV_VAR_PREFIX}CHUNK_LINES_AMOUNT":       DEFAULT_CHUNK_LINES_AMOUNT,
         f"{TERM_TREE_MAKER_ENV_VAR_PREFIX}DEBUG_PRESERVE_TMP_FILES": DEFAULT_DEBUG_PRESERVE_TMP_FILES,
