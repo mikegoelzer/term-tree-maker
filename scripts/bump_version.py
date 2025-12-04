@@ -134,14 +134,15 @@ def main() -> None:
     new_version = current.bump(args.part)
     tag_version(new_version)
 
-    should_push = False
-    if args.push and args.part in {"major", "minor"}:
+    should_push = args.push
+    if should_push and args.part in {"major", "minor"}:
         should_push = (args.no_prompt) or (confirm(f"Push tag {TAG_PREFIX}{new_version} to origin now?"))
 
     if should_push:
         push_tag(new_version)
         print(f"Tagged version {new_version} ({TAG_PREFIX}{new_version}) and pushed to origin.")
     else:
+        print(f"Tagged version {new_version} ({TAG_PREFIX}{new_version})")
         print("Run `git push origin --tags` to publish the newly created tag.")
 
 
