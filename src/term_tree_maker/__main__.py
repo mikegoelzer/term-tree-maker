@@ -33,7 +33,7 @@ def main() -> int:
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 0
     except Exception as exc:
-        log.exception("Error: %s", exc)
+        log.critical("Error: %s", exc, exc_info=True)
         return 1
     return result if isinstance(result, int) else 0
 

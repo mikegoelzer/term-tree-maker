@@ -11,9 +11,9 @@ from curvpyutils.version_utils import get_version_str
 from typing import Optional
 import sys
 from .settings import LOG_FILE, DEFAULT_LOG_FILE_WIDTH
-from logging import getLogger
+import logging
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
 
 _init_logging_done = False
 
