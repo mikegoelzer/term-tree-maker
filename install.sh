@@ -27,6 +27,19 @@ systemctl --user import-environment \
 sudo tee /usr/local/bin/desktop-env-wrapper >/dev/null <<'EOF'
 #!/bin/bash
 
+#
+# Note: this script wraps any command, providing a GUI desktop environment based
+# on pre-memorized systemd user environment variables.
+#
+# This script is useful for running commands over SSH to get a GUI desktop 
+# environment. Any env vars already in caller's environment are propagated 
+# to the wrapped command unchanged.
+#
+# Script also add a flag: IN_DESKTOP_ENV_WRAPPER=1 to the wrapped command's
+# environment. This allows a script to detect if it has already been wrapped
+# and is therefore already running in a GUI desktop environment.
+#
+
 # vars we care about
 NEEDED_VARS=(
   DISPLAY
