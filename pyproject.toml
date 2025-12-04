@@ -48,8 +48,11 @@ dev = [
 
 [project.scripts]
 term-tree-maker = "term_tree_maker.__main__:main"
-term-tree-screenshot-maker = "term_tree_maker.screenshot_maker:main"
-term-tree-crop-util = "term_tree_maker.crop_util:main"
+term-tree-screenshot-maker = "term_tree_maker.term_tree_screenshot_maker_wrapper:main"
+term-tree-crop-util = "term_tree_maker.term_tree_crop_util:main"
+# convenience names
+tree-maker = "term_tree_maker.__main__:main"
+tree-screenshot-maker = "term_tree_maker.term_tree_screenshot_maker_wrapper:main"
 
 [project.urls]
 homepage = "https://github.com/mikegoelzer/term-tree-maker"
