@@ -15,3 +15,9 @@ dist/
 uv.lock
 
 .ruff_cache/
+
+# any log files that wind up in this dir
+*.log
+*.log2
+
+output/

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 
 """
-Demonstrates how to display a tree of files / directories with the Tree renderable.
+Display a tree of files / directories
 """
 
 import io
@@ -12,11 +12,19 @@ from rich.tree import Tree
 from rich.table import Table
 from rich.console import Console
 from rich.measure import Measurement
+from rich.markup import escape
 import re
-from typing import ClassVar, Any, Callable
+from typing import ClassVar, Any, Callable, Optional
 from enum import Enum
 from textwrap import TextWrapper
 import argparse
+from curvtools.cli.curvcfg.lib.util import CfgValue, CfgValues
+import logging
+from . import init_logging
+from .settings import get_env_or_defaults, LOG_FILE_WIDTH_BUFFER
+from curvpyutils.colors import AnsiColorsTool
+
+log = logging.getLogger(__name__)
 
 # console = Console(force_terminal=True, color_system="truecolor")
 console = Console()
@@ -387,6 +395,187 @@ from dotenv import dotenv_values
 import os
 from pathlib import PurePosixPath, Path
 
+def _match_vars(s: str) -> list[tuple[str, tuple[int, int], str]]:
+    """
+    Match all $(VAR_NAME) and ${VAR_NAME} patterns in the given string and 
+    return a list of tuples containing the variable name, the span of the match, 
+    and the match itself.
+
+    Args:
+        s: the string to match $(VAR_NAME) and ${VAR_NAME} patterns in
+
+    Returns:
+        A list of tuples containing the variable name, the span of the match, and the match itself.
+    """
+    import re
+    regex = re.compile(r'\$\((?P<var_name_parens>[^)]+)\)|\$\{(?P<var_name_braces>[^}]+)\}')
+    vars_spans = []
+    for match in regex.finditer(s):
+        var_name = match.group("var_name_parens") or match.group("var_name_braces")
+        vars_spans.append((var_name, match.span(), s[match.start():match.end()]))
+    return vars_spans or []
+
+def test_match_vars():
+    s = "$(X)/${Y}/$(Z)"
+    m = _match_vars(s)
+    assert len(m) == 3, f"Expected 3 matches, got {len(m)}"
+    var_name, (start, end), match = m[0]
+    assert var_name == "X", f"Expected X, got {var_name}"
+    assert start == 0, f"Expected 0, got {start}"
+    assert end == 4, f"Expected 4, got {end}"
+    assert match == "$(X)", f"Expected $(X), got {match}"
+    var_name, (start, end), match = m[1]
+    assert var_name == "Y", f"Expected Y, got {var_name}"
+    assert start == 5, f"Expected 5, got {start}"
+    assert end == 9, f"Expected 9, got {end}"
+    assert match == "${Y}", f"Expected ${Y}, got {match}"
+    var_name, (start, end), match = m[2]
+    assert var_name == "Z", f"Expected Z, got {var_name}"
+    assert start == 10, f"Expected 10, got {start}"
+    assert end == 14, f"Expected 14, got {end}"
+    assert match == "$(Z)", f"Expected $(Z), got {match}"
+
+def _replace_vars(s: str, vars: dict[str, str]) -> str:
+    """
+    Replace all $(VAR_NAME) and ${VAR_NAME} patterns in the given string with the value of the variable.
+
+    Args:
+        s: the string to replace $(VAR_NAME) and ${VAR_NAME} patterns in
+        vars: a dict[str, str] of variable names -> their values 
+            (None values are ignored and the $(VAR_NAME) or ${VAR_NAME} is left unchanged)
+
+    Returns:
+        The string with the $(VAR_NAME) and ${VAR_NAME} patterns replaced with 
+        the value of the variable if provided and not None.
+    """
+    vars_spans = _match_vars(s)
+    pos_delta = 0
+    for var_name, (start, end), match in vars_spans:
+        if vars is not None and var_name in vars and vars[var_name] is not None:
+            s = s[:start + pos_delta] + vars[var_name] + s[end + pos_delta:]
+            pos_delta += len(vars[var_name]) - len(match)
+    return s
+
+def test_replace_vars():
+    vars = { 'X': 'xxx', 'Y': 'yyy', 'Z': 'zzz' }
+    s = "$(X)/${Y}/$(Z)"
+    s = _replace_vars(s, vars)
+    assert s == "xxx/yyy/zzz", f"Expected xxx/yyy/zzz, got {s}"
+
+def test_replace_vars_edge_cases():
+    # nothing to replace
+    vars = { 'X': 'xxx', 'Y': 'yyy', 'Z': 'zzz' }
+    s = "xxx/yyy/zzz"
+    s = _replace_vars(s, vars)
+    assert s == "xxx/yyy/zzz", f"Expected xxx/yyy/zzz, got {s}"
+
+def test_replace_vars_only_some():
+    # some vars are not provided and should be left unchanged
+    vars = { 'Z': 'zzz' }
+    s = "$(X)/${Y}/$(Z)"
+    s = _replace_vars(s, vars)
+    assert s == "$(X)/${Y}/zzz", f"Expected $(X)/${{Y}}/zzz, got {s}"
+
+def test_replace_vars_some_vars_are_none():
+    # some vars are provided asNone and should be left unchanged
+    vars = { 'X': None, 'Y': 'yyy', 'Z': 'zzz' }
+    s = "$(X)/${Y}/$(Z)"
+    s = _replace_vars(s, vars)
+    assert s == "$(X)/yyy/zzz", f"Expected $(X)/yyy/zzz, got {s}"
+
+class CurvConfigPath:
+    def __init__(self, path: str|Path, PROFILE: str = None, BOARD: str = None, DEVICE: str = None, BUILD_DIR: str = None, CURV_ROOT_DIR: str = None, cfgvalues: CfgValues = None):
+        self.path_str = str(path)
+        self.profile = PROFILE
+        self.board = BOARD
+        self.device = DEVICE
+        self.build_dir = BUILD_DIR
+        self.curv_root_dir = CURV_ROOT_DIR
+        self.cfgvalues = cfgvalues
+        self._run_var_replacement()
+
+    def is_fully_resolved(self) -> bool:
+        return len(_match_vars(self.path_str)) == 0
+
+    def __str__(self):
+        if not self.is_fully_resolved():
+            return self.path_str
+        return str(Path(self.path_str).resolve())
+
+    def __repr__(self):
+        resolved_str = "[resolved]" if self.is_fully_resolved() else "[unresolved]"
+        return f"CurvConfigPath({str(self)} {resolved_str})"
+
+    def _run_var_replacement(self) -> None:
+        """
+        Replace all $(VAR_NAME) and ${VAR_NAME} patterns in the given string 
+        with the value of the variable from this CurvConfigPath object.
+        """
+        replacement_vals = { 
+            'PROFILE': self.profile, 
+            'BOARD': self.board, 
+            'DEVICE': self.device,
+            'BUILD_DIR': self.build_dir, 
+            'CURV_ROOT_DIR': self.curv_root_dir,
+        }
+        if self.cfgvalues is not None:
+            for k, v in self.cfgvalues.items():
+                replacement_vals[k] = str(v)
+        self.path_str = _replace_vars(self.path_str, replacement_vals)
+
+class CurvConfigPathEnv(dict[str, CurvConfigPath]):
+    def __init__(self, env_file: str, PROFILE: str | None = None, BOARD: str | None = None, DEVICE: str | None = None, BUILD_DIR: str | None = None, CURV_ROOT_DIR: str | None = None, cfgvalues: CfgValues | None = None):
+        super().__init__()
+        self.env_file = env_file
+        self.profile = PROFILE
+        self.board = BOARD
+        self.device = DEVICE
+        self.build_dir = BUILD_DIR
+        self.curv_root_dir = CURV_ROOT_DIR
+        self.cfgvalues = cfgvalues
+        self._refresh_from_path_env_file()
+
+    def _refresh_from_path_env_file(self) -> None:
+        """
+        Read a path_raw.env file and return a dictionary of the variables with their values interpreted where possible.
+        """
+        env_values = dotenv_values(self.env_file)
+
+        # now replace and $(VAR_NAME) with the value of VAR_NAME
+        replacement_vals = { 
+            'PROFILE': self.profile, 
+            'BOARD': self.board, 
+            'DEVICE': self.device,
+            'BUILD_DIR': self.build_dir, 
+            'CURV_ROOT_DIR': self.curv_root_dir,
+        }
+        if self.cfgvalues is not None:
+            for k, v in self.cfgvalues.items():
+                replacement_vals[k] = str(v)
+        self.clear()
+        for k, v in env_values.items():
+            if v is None:
+                continue
+            new_value = CurvConfigPath(
+                path=v, 
+                PROFILE=self.profile, 
+                BOARD=self.board, 
+                DEVICE=self.device,
+                BUILD_DIR=self.build_dir, 
+                CURV_ROOT_DIR=self.curv_root_dir, 
+                cfgvalues=self.cfgvalues
+            )
+            self[k] = new_value
+    
+    def refresh(self, PROFILE: str | None = None, BOARD: str | None = None, BUILD_DIR: str | None = None, CURV_ROOT_DIR: str | None = None, DEVICE: str | None = None, cfgvalues: CfgValues | None = None) -> None:
+        self.profile = PROFILE if PROFILE is not None else self.profile
+        self.board = BOARD if BOARD is not None else self.board 
+        self.device = DEVICE if DEVICE is not None else self.device
+        self.build_dir = BUILD_DIR if BUILD_DIR is not None else self.build_dir
+        self.curv_root_dir = CURV_ROOT_DIR if CURV_ROOT_DIR is not None else self.curv_root_dir
+        self.cfgvalues = cfgvalues if cfgvalues is not None else self.cfgvalues
+        self._refresh_from_path_env_file()
+
 def make_data_from_path_env(
     max_comment_line_width: int,
     env_file: str = "path_raw.env",
@@ -406,27 +595,32 @@ def make_data_from_path_env(
     Node.MAX_COMMENT_LINE_WIDTH = max_comment_line_width
 
     # 2) Get CURV_ROOT_DIR from the environment
-    try:
-        curv_root_dir = os.environ["CURV_ROOT_DIR"]
-    except KeyError:
-        curv_root_dir = "/home/mwg/ecp5-first-steps/my-designs/riscv-soc"
-        os.environ["CURV_ROOT_DIR"] = curv_root_dir
+    curv_root_dir = "/home/mwg/ecp5-first-steps/my-designs/riscv-soc"
     build_dir = "/home/mwg/ecp5-first-steps/my-designs/riscv-soc/riscv/tb/verilator/riscvcpu/build"
-    os.environ["BUILD_DIR"] = build_dir
 
     # 3) Resolve values from path_raw.env
-    #    This will expand ${CURV_ROOT_DIR}, ${BUILD_DIR}, etc. using os.environ.
-    values = dotenv_values(env_file)
+    env_file_values = CurvConfigPathEnv(env_file, BUILD_DIR=build_dir, CURV_ROOT_DIR=curv_root_dir)
+    cfgvalues = CfgValues(vals={'CFG_CACHE_HEX_FILES_SRC_NAME' : CfgValue(
+            value="auipc-bypass",
+            meta={
+                'makefile_type': 'string',
+                'locations': ['all'],
+                'toml_path': 'cache.hex_files.src_name',
+                'sv_type': 'string',
+                'type': 'string',
+                'is_default': False
+            },
+            schema_entry={
+                'toml_path': 'cache.hex_files.src_name',
+                'type': 'string',
+                'default': 'auipc-bypass'
+            },
+        )
+    })
+    env_file_values.refresh(cfgvalues=cfgvalues, PROFILE='default', BOARD='gcm-v1', DEVICE='85f')
 
-    new_values = {}
-    for key, value in values.items():
-        if not '/' in value:
-            continue
-        v = value.replace("$(CFG_CACHE_HEX_FILES_SRC_NAME)", "auipc-bypass")
-        new_values[key] = str(Path(v).resolve().as_posix())
-    
     # Normalize to a POSIX-style string for prefix matching
-    curv_repo_dir = PurePosixPath(os.path.join('../..', curv_root_dir)).as_posix()
+    curv_repo_dir = Path(os.path.join(curv_root_dir, '../..')).resolve().as_posix()
 
     # Root node of the tree
     root_node = Node(
@@ -451,18 +645,22 @@ def make_data_from_path_env(
         return parent.add_child(name=name, trailing_comment=comment)
 
     # 3) Walk all resolved env vars
-    for var_name, raw_val in new_values.items():
+    for var_name, curv_config_path in env_file_values.items():
+        raw_val = str(curv_config_path)
+        if not curv_config_path.is_fully_resolved():
+            print(f"not fully resolved: {curv_config_path}")
         if not raw_val:
             continue
 
         # Force to POSIX style (in case of Windows or mixed separators)
         val = PurePosixPath(raw_val).as_posix()
 
-        # 4) Keep only paths under CURV_ROOT_DIR
+        # 4) Keep only paths under CURV_REPO_DIR
         if not val.startswith(curv_repo_dir):
+            print(f"not starting with curv_repo_dir: {val}")
             continue
 
-        # 5) Replace that prefix with literal CURV_ROOT_DIR
+        # 5) Replace that prefix with literal CURV_REPO_DIR
         #    Example: /home/.../curv/config/schema.toml
         #    → CURV_REPO_DIR/config/schema.toml
         tail = val[len(curv_repo_dir):]
@@ -474,6 +672,7 @@ def make_data_from_path_env(
         #    parts[0] == "CURV_REPO_DIR", remaining are subdirs/files
         parts = PurePosixPath(canonical).parts
         if not parts or parts[0] != "CURV_REPO_DIR":
+            print(f"not parts or parts[0] != CURV_REPO_DIR: {parts}")
             continue
 
         # Build / extend the tree for this path
@@ -625,50 +824,85 @@ def calculate_max_comment_line_width(tree: Tree, spacing_after_tree: int = DEFAU
         max_comment_line_width = 0
     return max_comment_line_width
 
-def parse_args() -> argparse.Namespace:
+def parse_args(grandparent_parser: Optional[argparse.ArgumentParser] = None) -> argparse.Namespace:
     parent_parser = argparse.ArgumentParser(add_help=False)
-    #parent_parser.parse_known_args()
+    ansi = AnsiColorsTool()
+    ANSI_GREY = ansi.lt_grey
+    ANSI_DARK_GREY = ansi.drk_grey
+    ANSI_BOLD = ansi.bold
+    ANSI_BRIGHT_BLUE = ansi.bright_blue
+    ANSI_RESET = ansi.reset
     parser = argparse.ArgumentParser(
         description="Render a tree of files / directories",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=([grandparent_parser] if grandparent_parser is not None else []),
         epilog="""
-EXAMPLES:
+{ANSI_BOLD}Examples:{ANSI_RESET}
 
-$ {prog} -xt
-[...prints the entire tree with extra top lines for screenshotting...]
+  $ {ANSI_BRIGHT_BLUE}{prog} -d{ANSI_RESET}
+  {ANSI_GREY}[...prints the entire tree based on test data...]{ANSI_RESET}
 
-# -q flag emits lines that can be eval'd in a shell script for loop control
-# and terminal sizing on the last chunk
-$ {prog} -L 70 -q
-CHUNKS_COUNT=2
-LAST_CHUNK_LINE_COUNT=35
+  $ {ANSI_BRIGHT_BLUE}{prog} -e [env-file-path]{ANSI_RESET}
+  {ANSI_GREY}[...prints the entire tree based on the environment file specified by -e/--env-file...]{ANSI_RESET}
 
-# use eval to extract just one or the other of the two numeric values
-$ eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$CHUNKS_COUNT"
-2
-$ eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$LAST_CHUNK_LINE_COUNT"
-35
+  {ANSI_DARK_GREY}# -q flag emits lines that can be eval'd in a shell script{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -q{ANSI_RESET}
+  {ANSI_GREY}CHUNKS_COUNT=2{ANSI_RESET}
+  {ANSI_GREY}LAST_CHUNK_LINE_COUNT=35{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$CHUNKS_COUNT"{ANSI_RESET}
+  {ANSI_GREY}2{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}eval "$({prog} -L 70 -q)" ; printf '%s\\n' "$LAST_CHUNK_LINE_COUNT"{ANSI_RESET}
+  {ANSI_GREY}35{ANSI_RESET}
 
-# print just the first chunk
-$ {prog} -L 70 -l 0
-[...prints the first chunk of 70 lines...]
-$ {prog} -L 70 -l 1
-[...prints the second chunk of 35 lines...]
-$ {prog} -L 70 -l 2
-No more chunks remaining
-""".format(prog=parent_parser.prog),
+  {ANSI_DARK_GREY}# print one chunk at a time{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -l 0{ANSI_RESET}
+  {ANSI_GREY}[...prints the first chunk of 70 lines...]{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -l 1{ANSI_RESET}
+  {ANSI_GREY}[...prints the second chunk of 35 lines...]{ANSI_RESET}
+  $ {ANSI_BRIGHT_BLUE}{prog} -L 70 -l 2{ANSI_RESET}
+  {ANSI_GREY}No more chunks remaining{ANSI_RESET}
+""".format(prog=parent_parser.prog, ANSI_GREY=ANSI_GREY, ANSI_DARK_GREY=ANSI_DARK_GREY, ANSI_RESET=ANSI_RESET, ANSI_BOLD=ANSI_BOLD, ANSI_BRIGHT_BLUE=ANSI_BRIGHT_BLUE),
     )
-    parser.add_argument("--insert-extra-top-line", '-xt', action="store_true", default=False, help="insert extra top line above the tree (default: %(default)s).")
     chunk_group = parser.add_argument_group("Chunk Mode Options")
     chunk_group.add_argument("--chunk-lines-amount", '-L', type=int, default=None, help="Emit lines in chunks of this amount. If 0, will print the entire tree.  If not specified, will print the entire tree and chunk mode is disabled so other options like --chunk-number and --chunks-count are ignored.")
     chunk_group.add_argument("--chunk-number", '-l', type=int, default=0, help="If there are more than --chunk-lines-amount lines, emit this chunk. The first chunk is numbered zero.  If you request a chunk number beyond the final one, the program will exit with code 1 to indicate no additional lines remain.  Ignored unless --chunk-lines-amount/-L is specified. (Default: %(default)s).")
     chunk_group.add_argument("--chunk-count", '-q', action="store_true", default=False, help="Query for the total number of chunks that can be emitted. The maximum --chunk-number is one less than the total number of chunks.  Ignored unless --chunk-lines-amount/-L is specified. (Default: %(default)s).")
-    return parser.parse_args()
+    data_source_group = parser.add_argument_group("Data Source Options")
+    data_source_group_mutex = data_source_group.add_mutually_exclusive_group()
+    data_source_group_mutex.add_argument("--env-file", '-e', dest="data_source", type=str, help="Path to the environment file to use for the data source.")
+    data_source_group_mutex.add_argument("--dummy-data", '-d', dest="data_source", action="store_const", const="USE_DUMMY_DATA", help="Use dummy data instead of the data source (default).")
+    parser.set_defaults(data_source="USE_DUMMY_DATA")
+    args = parser.parse_args()
 
-def main() -> None:
-    args = parse_args()
+    if args.data_source is None:
+        parser.error("Either --env-file or --dummy-data must be specified.")
+    
+    try:
+        console.width = args.width
+    except Exception as e:
+        log.error(f"ERROR: could not set console width to {args.width}: {e}")
+        raise SystemExit(1) from e
+
+    return args
+
+def main(parent_parser: Optional[argparse.ArgumentParser] = None) -> None:
+    env_values:dict[str, int | str] = {}
+    env_values = get_env_or_defaults()
+
+    def logger_strip_ansi(s: str) -> str:
+        ansi_re = re.compile(r"\x1b\[[0-9;]*m")
+        return ansi_re.sub("", s).rstrip()
+
+    args = parse_args(grandparent_parser=parent_parser)
+    
+    # use either dummy data or the environment file to make the data per the CLI args
     max_comment_line_width = None # initial value to prevent any spilling until we know tree width
-    data_fn = lambda max_comment_line_width: make_data_from_path_env(max_comment_line_width, env_file="/home/mwg/ecp5-first-steps/my-designs/riscv-soc/scripts/make/paths_raw.env")
+    if args.data_source == "USE_DUMMY_DATA":
+        data_fn = lambda max_comment_line_width: make_dummy_data(max_comment_line_width)
+    else:
+        data_fn = lambda max_comment_line_width: make_data_from_path_env(max_comment_line_width, env_file=args.data_source)
+    
+    # make the Node tree from the data source
     root = data_fn(max_comment_line_width)
 
     invisible_table = Table.grid(padding=0)
@@ -700,31 +934,31 @@ def main() -> None:
     invisible_table.add_row(tree, Text.assemble(*text_nodes[:-1]))
 
     def ansi_aware_replace(s: str) -> str:
-        ANSI = r"\x1b\[[0-9;]*m"
+        ANSI_RE = r"\x1b\[[0-9;]*m"
 
         # prefix: any number of SGRs applied to the guides
         # mid:    any SGRs between the guides and "<"
         pat_non_corner = re.compile(
-            rf"(?P<prefix>(?:{ANSI})*)┣━━ (?P<mid>(?:{ANSI})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI})*)(?P<comment>[^\n]*)"
+            rf"(?P<prefix>(?:{ANSI_RE})*)┣━━ (?P<mid>(?:{ANSI_RE})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI_RE})*)(?P<comment>[^\n]*)"
         )
         pat_corner = re.compile(
-            rf"(?P<prefix>(?:{ANSI})*)┗━━ (?P<mid>(?:{ANSI})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI})*)(?P<comment>[^\n]*)"
+            rf"(?P<prefix>(?:{ANSI_RE})*)┗━━ (?P<mid>(?:{ANSI_RE})*)(?P<erase_marker>[<^])(?P<precomment_space>[\s<]*)(?P<mid2>(?:{ANSI_RE})*)(?P<comment>[^\n]*)"
         )
         # pat_last_node_in_subtree = re.compile(
         #     rf"(?P<prefix>(?:{ANSI})*)┣━━ (?P<mid0>(?:{ANSI})*)📄 (?P<mid1>(?:{ANSI})*)(?P<name>[^\n<\x1b]*)(?P<mid2>(?:{ANSI})*)(?P<precomment_space>\s*<<<<\s*)(?P<mid3>(?:{ANSI})*)(?P<comment>[^\n]*)"
         # )
         pat_last_node_in_subtree2 = re.compile(
             rf"""
-            (?P<prefix>(?:{ANSI})*)           # guides / prefix
+            (?P<prefix>(?:{ANSI_RE})*)            # guides / prefix
             [┗|┣]━━\s                             # literal guides and space
-            (?P<mid0>(?:{ANSI})*)             # color for the leaf
-            📄\s                              # leaf emoji + space
-            (?P<mid1>(?:{ANSI})*)             # any ANSI before name
-            (?P<name>[^\n<\x1b]*)             # name: anything but newline, '<', or ESC
-            (?P<mid2>(?:{ANSI})*)             # ANSI after name
-            (?P<precomment_space>\s*<<<<\s*)  # require '<<<<' (with optional spaces)
-            (?P<mid3>(?:{ANSI})*)             # ANSI before comment
-            (?P<comment>[^\n]*)               # rest of the line, up to newline
+            (?P<mid0>(?:{ANSI_RE})*)              # color for the leaf
+            📄\s                                  # leaf emoji + space
+            (?P<mid1>(?:{ANSI_RE})*)              # any ANSI before name
+            (?P<name>[^\n<\x1b]*)                 # name: anything but newline, '<', or ESC
+            (?P<mid2>(?:{ANSI_RE})*)              # ANSI after name
+            (?P<precomment_space>\s*<<<<\s*)      # require '<<<<' (with optional spaces)
+            (?P<mid3>(?:{ANSI_RE})*)              # ANSI before comment
+            (?P<comment>[^\n]*)                   # rest of the line, up to newline
             """,
             re.VERBOSE,
         )
@@ -807,14 +1041,13 @@ def main() -> None:
         console.print(invisible_table)
     s = capture.get()
     s = ansi_aware_replace(s)
-    if args.insert_extra_top_line:
-        print("")
 
     if args.chunk_lines_amount is None or args.chunk_lines_amount == 0:
         lines = s.split('\n')
         for ln in lines:
             if ln.strip() != "":
                 print(ln)
+                log.debug(logger_strip_ansi(ln))
         sys.exit(0)
     else:
         # chunk mode enabled
@@ -824,15 +1057,25 @@ def main() -> None:
         if args.chunk_count:
             print(f"CHUNKS_COUNT={len(chunks)}")
             print(f"LAST_CHUNK_LINE_COUNT={len(chunks[-1])}")
+            log.info(f"CHUNKS_COUNT={len(chunks)}")
+            log.info(f"LAST_CHUNK_LINE_COUNT={len(chunks[-1])}")
             sys.exit(0)
         elif args.chunk_number < len(chunks):
             for ln in chunks[args.chunk_number]:
                 print(ln)
+                log.debug(logger_strip_ansi(escape(ln)))
             sys.exit(0)
         else:
             console.print("No more chunks remaining")
+            log.error("No more chunks remaining")
             sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except SystemExit as e:
+        sys.exit(e.code)
+    except Exception as e:
+        log.critical(f"Error: %s", e, exc_info=True)
+        sys.exit(1)
 

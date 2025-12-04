@@ -1,81 +1,55 @@
-# tree-maker
+# `tree-maker`
 
-A tool to make a screenshot of a tree of nodes defined in Python code.
-
-## Install via pip/uv
-
-term-tree-maker is published on PyPI. Install it with whichever tool you prefer:
-
-```bash
-# using uv
-uv pip install term-tree-maker
-
-# or plain pip
-python -m pip install --upgrade pip
-python -m pip install term-tree-maker
-```
-
-## CLI overview
-
-After installing, three console commands are available everywhere on your PATH:
-
-| Command | Description |
-|---------|-------------|
-| `tree` | Runs the packaged `tree.py` script that generates the text-based tree visualization. All original CLI flags still work. |
-| `make-tree-screenshot` | Launches the Konsole/gnome-screenshot workflow to capture the tree output into PNGs (wraps `make-tree-screenshot.sh`). |
-| `make-png-from-ssh` | Convenience wrapper for invoking the screenshot workflow from an SSH session (wraps `make-png-from-ssh.sh`). |
-
-Each command accepts the same arguments as its original script. Example:
-
-```bash
-tree --chunk-lines-amount 70 --chunk-count
-make-tree-screenshot output/my-tree
-make-png-from-ssh
-```
-
-> **Note:** The first-time desktop environment preparation (`install.sh`) is still required on the target GNOME machine. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the full setup checklist.
+A tool to display a text-based tree of nodes defined in Python code and make a screenshot of the tree.
 
 ## Installation
 
-- From the Gnome console (physically at the machine or over RDP):
+`term-tree-maker` is published on PyPI. 
+
+Install it with whichever tool you prefer:
+
+```bash
+# Option 1: using `uv`
+uv pip install term-tree-maker
+
+# Option 2: using plain `pip`
+python -m pip install --upgrade pip
+python -m pip install term-tree-maker
+
+# Option 3: using `pipx`
+pipx install term-tree-maker
+```
+
+Run the installation script one time from a Gnome or KDE console.  You must be physically at the machine or connected over VNC/RDP.  This will **NOT work over SSH**:
 
 ```bash
 cd <this directory>
-[ -f $PWD/src/term_tree_maker/make-tree-screenshot.sh ] && echo "✅ good you're in the right dir: $PWD" || echo "ERROR: you're in the wrong dir"
+# requires sudo privileges:
+./install.sh && echo "✅ Installed term-tree-maker" >&1 || echo "❌ Failed to install term-tree-maker" >&2
 ```
 
-The above just verifies that we are in the right directory because `install.sh` won't work otherwise.  It writes config files the current value of `$PWD`.
+`install.sh` creates a Konsole profile in your home directory, and also installs a wrapper script in `/usr/local/bin` that launches Konsole with the correct GUI console environment from SSH sessions.
+
+## CLI overview
+
+After installing, two console commands are available everywhere on your PATH:
+
+| Command                 | Description |
+|-------------------------|-------------|
+| `tree-maker`            | Runs the packaged `term_tree_maker.py` script that generates the text-based tree visualization. All original CLI flags still work. |
+| `tree-screenshot-maker` | Launches Konsole + gnome-screenshot to capture the tree output into PNG chunks. |
 
 
-```bash
-./install.sh && echo "✅ Installed tree-maker" >&1 || ( echo "❌ Failed to install tree-maker" >&2 && exit 1 )
-```
-
-- Append this to your `~/.bashrc` to make it easier to run:
-
-```bash
-#
-# allow gnome wayland desktop apps to be started from ssh sessiosn
-#
-export QT_QPA_PLATFORM=wayland
-```
-
-```bash
-source ~/.bashrc
-```
+Usage examples are provided below.
 
 ## Usage
 
-- From an SSH session into the server where the tree-maker is installed:
+From either a local GUI desktop session or an SSH session into the server where the `tree-maker` and `tree-screenshot-maker` are installed, you can run the following commands:
 
 ```bash
-[user@server] make-png-from-ssh
-[user@server] it2dl tree.png   # download the tree image to your local machine
-[user@server] imgcat tree.png  # display the tree image in your local terminal
+[user@server] tree-maker --chunk-lines-amount 70 --chunk-count --dummy-data
 ```
 
-- Or run the screenshot workflow locally (GNOME desktop session) with a custom output prefix:
-
 ```bash
-make-tree-screenshot output/my-tree
+[user@server] tree-screenshot-maker -o output -e .env
 ```
