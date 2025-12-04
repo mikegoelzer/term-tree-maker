@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""
-Utility script to bump the term-tree-maker semantic version and create a git tag.
-
-Usage:
-    uv run python scripts/bump_version.py patch
-    uv run python scripts/bump_version.py minor --push
-    uv run python scripts/bump_version.py major
-"""
 
 from __future__ import annotations
+
+EPILOG_TEXT="""
+Usage:
+    uv run python scripts/bump_version.py patch [-y]
+    uv run python scripts/bump_version.py minor --push [-y]
+    uv run python scripts/bump_version.py major [-y]
+
+Options:
+    -y, --no-prompt  Do not prompt for confirmation, just assume yes.
+    --show-latest    Print the latest known version (no tagging) and exit.
+    --push           Push the newly created tag to origin. Major/minor bumps 
+                     will prompt for confirmation unless '-y' is specified.
+"""
 
 import argparse
 import os
@@ -79,7 +84,9 @@ def push_tag(version: Version) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Bump the semantic version and create a git tag."
+        description="Bump the semantic version and create a git tag.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=EPILOG_TEXT
     )
     parser.add_argument(
         "part",
@@ -95,15 +102,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--push",
         action="store_true",
-        help="Push the newly created tag to origin. (Major/minor bumps will still prompt for confirmation.)",
+        help="Push the newly created tag to origin. Major/minor bumps will prompt for confirmation unless '-y' is specified.",
     )
+    parser.add_argument(
+        '-y', "--no-prompt", 
+        dest="no_prompt",
+        action="store_true", 
+        default=False, 
+        help="Do not prompt for confirmation, just assume yes. (Default: %(default)s).")
     return parser.parse_args()
 
 
 def confirm(message: str) -> bool:
     try:
         from rich.prompt import Confirm
-
         return Confirm.ask(message, default=False)
     except Exception:
         resp = input(f"{message} [y/N]: ").strip().lower()
@@ -121,16 +133,16 @@ def main() -> None:
     current = get_latest_version()
     new_version = current.bump(args.part)
     tag_version(new_version)
-    should_push = args.push
-    if should_push and args.part in {"major", "minor"}:
-        should_push = confirm(
-            f"Push tag term-tree-maker-v{new_version} to origin now?"
-        )
+
+    should_push = False
+    if args.push and args.part in {"major", "minor"}:
+        should_push = (args.no_prompt) or (confirm(f"Push tag {TAG_PREFIX}{new_version} to origin now?"))
+
     if should_push:
         push_tag(new_version)
-    print(f"Tagged version {new_version} ({TAG_PREFIX}{new_version})")
-    if not args.push:
-        print("Run `git push origin --tags` or re-run with --push to publish the tag.")
+        print(f"Tagged version {new_version} ({TAG_PREFIX}{new_version}) and pushed to origin.")
+    else:
+        print("Run `git push origin --tags` to publish the newly created tag.")
 
 
 if __name__ == "__main__":
